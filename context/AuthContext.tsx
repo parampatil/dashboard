@@ -1,46 +1,69 @@
 // context/AuthContext.tsx
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User, signOut as firebaseSignOut } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged, User as FirebaseUser, signOut as firebaseSignOut } from "firebase/auth";
+import { doc, onSnapshot } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase-config";
 import { useRouter } from "next/navigation";
+import { User } from "@/types";
+import { createNewUser } from "@/app/actions/auth";
+
+// Create a combined type for the user
+type CombinedUser = FirebaseUser & User;
 
 interface AuthContextType {
-  user: User | null;
+  user: CombinedUser | null;
   loading: boolean;
-  allowedRoutes: string[];
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<CombinedUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [allowedRoutes, setAllowedRoutes] = useState<string[]>([]);
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (!userDoc.exists()) {
-          await setDoc(doc(db, "users", user.uid), {
-            email: user.email,
-            allowedRoutes: ['/profile'],
-            createdAt: new Date().toISOString()
-          });
-          setAllowedRoutes(['/profile']);
-        } else {
-          setAllowedRoutes(userDoc.data().allowedRoutes || []);
-        }
-        setUser(user);
-      } else {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
         setUser(null);
-        setAllowedRoutes([]);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      const unsubscribeUser = onSnapshot(
+        doc(db, "users", firebaseUser.uid),
+        async (doc) => {
+          if (!doc.exists()) {
+            // Create new user on server
+            const { success, user: newUser } = await createNewUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              imageUrl: firebaseUser.photoURL || undefined,
+            });
+
+            if (success && newUser) {
+              setUser({
+                ...firebaseUser,
+                ...newUser,
+                email: firebaseUser.email || newUser.email, // Ensure email is never null
+              } as CombinedUser);
+            }
+          } else {
+            const userData = doc.data() as User;
+            setUser({
+              ...firebaseUser,
+              ...userData,
+              email: firebaseUser.email || userData.email, // Ensure email is never null
+            } as CombinedUser);
+          }
+          setLoading(false);
+        }
+      );
+
+      return () => unsubscribeUser();
     });
 
     return () => unsubscribe();
@@ -53,7 +76,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, allowedRoutes, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

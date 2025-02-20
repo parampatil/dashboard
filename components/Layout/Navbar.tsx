@@ -1,3 +1,4 @@
+// @/components/Layout/Navbar.tsx
 "use client";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -22,13 +23,33 @@ const Navbar = () => {
     );
   }
 
-  const navItems = !user ? [
-    { path: "/login", name: "Login" }
-  ] : [
-    { path: "/dashboard", name: "Dashboard" },
-    ...(user.email === "admin@example.com" ? [{ path: "/admin", name: "Admin" }] : []),
-    { path: "/profile", name: "Profile" }
-  ];
+  // Get available routes from user's allowedRoutes
+  const getNavItems = () => {
+    if (!user) return [{ path: "/login", name: "Login" }];
+
+    const items = [];
+    const allowedRoutes = user.allowedRoutes || {};
+
+    // Add Dashboard if user has access to any dashboard route
+    if (Object.keys(allowedRoutes).some(route => route.startsWith('/dashboard'))) {
+      items.push({ path: "/dashboard", name: "Dashboard" });
+    }
+
+    // Add Admin if user has access to admin routes
+    if (allowedRoutes['/admin']) {
+      items.push({ path: "/admin/roles", name: "Roles" });
+      items.push({ path: "/admin/users", name: "Users" });
+    }
+
+    // Add Profile if user has access
+    if (allowedRoutes['/profile']) {
+      items.push({ path: "/profile", name: "Profile" });
+    }
+
+    return items;
+  };
+
+  const navItems = getNavItems();
 
   return (
     <motion.nav 
@@ -43,7 +64,7 @@ const Navbar = () => {
           whileTap={{ scale: 0.95 }}
         >
           <Link href="/" className="font-semibold text-lg">
-            Dashboard
+            360 Dashboard
           </Link>
         </motion.div>
 
@@ -57,12 +78,14 @@ const Navbar = () => {
                   className="relative px-3 py-2 rounded-md"
                 >
                   <span className={`relative z-10 ${
-                    pathname === item.path ? "text-primary" : "text-muted-foreground"
+                    pathname === item.path || pathname?.startsWith(item.path + '/') 
+                      ? "text-primary" 
+                      : "text-muted-foreground"
                   }`}>
                     {item.name}
                   </span>
                   
-                  {item.path === hoveredPath && (
+                  {(item.path === hoveredPath || pathname?.startsWith(item.path + '/')) && (
                     <motion.div
                       className="absolute inset-0 bg-secondary rounded-md -z-0"
                       layoutId="navbar-hover"

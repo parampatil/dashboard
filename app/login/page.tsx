@@ -1,10 +1,12 @@
 // app/login/page.tsx
 "use client";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth } from "@/lib/firebase-config";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-config";
 
 const LoginPage = () => {
   const router = useRouter();
@@ -12,8 +14,18 @@ const LoginPage = () => {
   const handleGoogleLogin = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-      router.push("/");
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Check user's roles and routes
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const hasRoutes = Object.keys(userData.allowedRoutes || {}).length > 0;
+        router.push(hasRoutes ? "/dashboard" : "/unauthorized");
+      } else {
+        router.push("/unauthorized");
+      }
     } catch (error) {
       console.error("Login error:", error);
     }

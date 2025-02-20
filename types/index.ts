@@ -1,19 +1,23 @@
 // types/index.ts
 export interface User {
-    uid: string;
-    name: string;
-    email: string;
-    roleId: string;
-    createdAt: string;
-    updatedAt: string;
-  }
-  
-  export interface Role {
-    id: string;
-    name: string;
-    description?: string;
-    allowedRoutes: string[];
-    createdAt: string;
-    updatedAt: string;
-  }
-  
+  uid: string;
+  email: string;
+  name: string;
+  imageUrl?: string;
+  roles: string[];
+  allowedRoutes: {
+    [key: string]: string; // route path -> route name
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Role {
+  name: string;
+  description?: string;
+  routes: {
+    [key: string]: string; // route path -> route name
+  };
+  createdAt: string;
+  updatedAt: string;
+}
